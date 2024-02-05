@@ -200,7 +200,8 @@ def dynamic_led_control(emf_level):
     # Keep the LED on for a fraction of the blink speed, then turn off
     time.sleep(blink_speed / 5)  # On time
     led_wing1_pwm.duty_cycle = 0
-    time.sleep(blink_speed / 5)  # Off time
+    time.sleep(blink_speed / 5)  # Off time    
+"""
 
 def play_sound_effect(track_number):
     global current_track
@@ -221,21 +222,7 @@ def play_track_based_on_emf(emf_reading):
         play_sound_effect(2)  # Attempt to play track 2
     else:
         play_sound_effect(3)  # Attempt to play track 3
-
-# def classify_emf_reading(reading, baseline):
-#     offset = reading - baseline
-#     if offset <= 40:
-#         return "MINIMUM"
-#     elif offset <= 300:
-#         return "LOW"
-#     elif offset <= 700:
-#         return "MODERATE"
-#     elif offset <= 1000:
-#         return "ELEVATED"
-#     else:
-#         return "EXTREME"
-
-"""
+        
 def check_and_handle_buttons():
     global last_increase_state, last_decrease_state, last_debounce_time
     current_increase_state = button_increase.value
