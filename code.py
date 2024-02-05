@@ -322,15 +322,13 @@ increase_pressed = False
 decrease_pressed = False
 
 while True:
-#    check_buttons_and_set_flags()
-#    mag_x, mag_y, mag_z = sensor.magnetic
-#    smoothed_value = smooth_and_process_data(mag_x, mag_y, mag_z, sensor_manager.baseline, history)    
+    check_and_handle_buttons()
     emf_reading = sensor_manager.process_sensor_data()
  
      if isinstance(processed_data, list) and len(processed_data) == 1:
-          emf_reading = processed_data[0]  # Extract the single value from the list
+          emf_reading = processed_data[0]
           
-    clamped_reading = max(EMF_MIN_ADC, min(EMF_MAX_ADC, emf_reading)) # Clamp intensity to [LED_INTENSITY_MIN, LED_INTENSITY_MAX] range
+    clamped_reading = max(EMF_MIN_ADC, min(EMF_MAX_ADC, emf_reading))
          
     led_controller.adjust_and_control_leds(clamped_reading)
     servo_ramp.emf_to_servo_pos(clamped_reading)
