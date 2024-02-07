@@ -58,16 +58,16 @@ class ButtonManager(object):
     debounce_delay           = 0.100):
      
     # Initialize sensitivity button pins
-    self.button_increase_sensitivity = self.setup_button(increase_sensitivity_pin or BUTTON_SENSITIVITY_INCREASE)
-    self.button_decrease_sensitivity = self.setup_button(decrease_sensitivity_pin or BUTTON_SENSITIVITY_DECREASE)
+    self.button_increase_sensitivity = self.setup_button(increase_sensitivity_pin or self.BUTTON_SENSITIVITY_INCREASE)
+    self.button_decrease_sensitivity = self.setup_button(decrease_sensitivity_pin or self.BUTTON_SENSITIVITY_DECREASE)
 
     # Initialize gain button pins
-    self.button_increase_gain = self.setup_button(increase_gain_pin or BUTTON_GAIN_INCREASE)
-    self.button_decrease_gain = self.setup_button(decrease_gain_pin or BUTTON_GAIN_DECREASE)
+    self.button_increase_gain = self.setup_button(increase_gain_pin or self.BUTTON_GAIN_INCREASE)
+    self.button_decrease_gain = self.setup_button(decrease_gain_pin or self.BUTTON_GAIN_DECREASE)
 
     # Setup LEDs
-    self.led_increase = self.setup_led(led_increase_pin if led_increase_pin else LED_INCREASED)
-    self.led_decrease = self.setup_led(led_decrease_pin if led_decrease_pin else LED_DECREASED)
+    self.led_increase = self.setup_led(led_increase_pin if led_increase_pin else self.LED_INCREASED)
+    self.led_decrease = self.setup_led(led_decrease_pin if led_decrease_pin else self.LED_DECREASED)
         
 # --- variables   --------------------------------------------------------
         
@@ -76,10 +76,10 @@ class ButtonManager(object):
     self.last_debounce_time = 0
 
     # Sensitivity variables
-    sensitivity = 0.5      # Starting sensitivity, adjust as needed
-    sensitivity_min = 0.1  # Minimum sensitivity
-    sensitivity_max = 1.0  # Maximum sensitivity
-    sensitivity_step = 0.1 # Sensitivity adjustment step
+    self.sensitivity = 0.5      # Starting sensitivity, adjust as needed
+    self.sensitivity_min = 0.1  # Minimum sensitivity
+    self.sensitivity_max = 1.0  # Maximum sensitivity
+    self.sensitivity_step = 0.1 # Sensitivity adjustment step
 
     # Gain variables
     self.current_gain_index = 0
@@ -91,7 +91,7 @@ class ButtonManager(object):
     """Initializes and returns a DigitalInOut object for a button on the specified pin."""
     button = digitalio.DigitalInOut(pin)
     button.direction = digitalio.Direction.INPUT
-    button.pull = digitalio.Pull.DOWN
+    button.pull = digitalio.Pull.UP  # Use internal pull-up resistor
     return button
 
   def setup_led(self, pin):
