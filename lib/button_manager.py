@@ -97,23 +97,63 @@ class ButtonManager():
     led = digitalio.DigitalInOut(pin)
     led.direction = digitalio.Direction.OUTPUT
     return led
-                  
+
+  def check_and_handle_buttons(self):
+    """Check each button and adjust sensitivity or gain accordingly"""
+    self.handle_button_press(self.button_increase_sensitivity, True, self.adjust_sensitivity)
+    self.handle_button_press(self.button_decrease_sensitivity, False, self.adjust_sensitivity)
+    self.handle_button_press(self.button_increase_gain, True, self.cycle_mag_gain)
+    self.handle_button_press(self.button_decrease_gain, False, self.cycle_mag_gain)
+
+  def handle_button_press(self, button, is_increase, action_method):
+    if self.check_button_pressed(button):
+        action_method(is_increase)
+        # Toggle corresponding LED based on the action
+        self.toggle_led(self.led_increase if is_increase else self.led_decrease)
+
+  def check_button_pressed(self, button):
+    current_time = time.monotonic()
+    if button.value and current_time - self.last_debounce_time > self.debounce_delay:
+        self.last_debounce_time = current_time
+        return True
+    return False
+
+  def toggle_led(self, led, duration=0.2):
+    led.value = True
+    time.sleep(duration)  # Provide visual feedback for a short duration
+    led.value = False
+
+  def adjust_sensitivity(self, is_increase):
+    # Adjust sensitivity within limits and provide feedback
+    new_sensitivity = self.sensitivity + (self.SENSITIVITY_STEP if is_increase else -self.SENSITIVITY_STEP)
+    self.sensitivity = max(self.SENSITIVITY_MIN, min(new_sensitivity, self.SENSITIVITY_MAX))
+    print(f"Sensitivity adjusted to {self.sensitivity}")
+
+  def cycle_mag_gain(self, is_increase):
+    # Cycle through the gain settings and wrap around as needed
+    self.current_gain_index += 1 if is_increase else -1
+    self.current_gain_index %= len(self.MAG_GAINS)
+        
   def check_and_handle_buttons(self):
     current_time = time.monotonic()
     # Handle sensitivity buttons
     if self.check_button_pressed(self.button_increase_sensitivity, current_time):
         self.adjust_sensitivity(True)
+        self.led_increase.value = True  # Turn on LED as feedback
         print("Sensitivity Increase button pressed")
     if self.check_button_pressed(self.button_decrease_sensitivity, current_time):
         self.adjust_sensitivity(False)
+        self.led_decrease.value = True  # Turn on LED as feedback
         print("Sensitivity Decrease button pressed")
     
     # Handle gain buttons
     if self.check_button_pressed(self.button_increase_gain, current_time):
         self.cycle_mag_gain(True)
+        self.led_increase.value = True  # Turn on LED as feedback
         print("Gain Increase button pressed")
     if self.check_button_pressed(self.button_decrease_gain, current_time):
         self.cycle_mag_gain(False)
+        self.led_decrease.value = True  # Turn on LED as feedback
         print("Gain Decrease button pressed") 
 
     # Debounce delay handling
@@ -126,29 +166,23 @@ class ButtonManager():
         return True
     return False
 
-  def adjust_sensitivity(self, is_increase):
-    """Adjust the sensitivity based on the button pressed."""
-    if is_increase:
-        self.sensitivity = min(self.sensitivity + self.sensitivity_step, self.sensitivity_max)
-    else:
-        self.sensitivity = max(self.sensitivity - self.sensitivity_step, self.sensitivity_min)
+ def adjust_sensitivity(self, is_increase):
+    """Adjusts sensitivity within defined limits."""
+    self.sensitivity += self.sensitivity_step * (1 if is_increase else -1)
+    self.sensitivity = max(self.sensitivity_min, min(self.sensitivity_max, self.sensitivity))
+    print(f"Sensitivity adjusted to {self.sensitivity}")
     
     print(f"Sensitivity adjusted to {self.sensitivity}")
     # apply the sensitivity adjustment to your application
 
   def cycle_mag_gain(self, is_increase):
-    """Adjust the gain based on the button pressed."""
-    if is_increase:
-        self.current_gain_index += 1
-        if self.current_gain_index >= len(self.mag_gains):
-            self.current_gain_index = 0
-    else:
-        self.current_gain_index -= 1
-        if self.current_gain_index < 0:
-            self.current_gain_index = len(self.mag_gains) - 1
-    if is_increase:
-        self.current_gain_index = (self.current_gain_index + 1) % len(self.mag_gains)
-    else:
-        self.current_gain_index = (self.current_gain_index - 1) % len(self.mag_gains)
-        
+    """Cycles through magnetometer gain settings."""
+    self.current_gain_index += 1 if is_increase else -1
+    self.current_gain_index %= len(self.mag_gains)  # Wrap index
+    print(f"Magnetometer gain set to {self.mag_gains[self.current_gain_index]}")
+
+  def cycle_mag_gain(self, is_increase):
+    """Cycles through magnetometer gain settings."""
+    self.current_gain_index += 1 if is_increase else -1
+    self.current_gain_index %= len(self.mag_gains)  # Wrap index
     print(f"Magnetometer gain set to {self.mag_gains[self.current_gain_index]}")
