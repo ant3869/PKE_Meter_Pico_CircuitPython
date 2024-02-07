@@ -72,8 +72,8 @@ y_history      = [OLED_HEIGHT // 6] * OLED_WIDTH    # Mid-screen baseline
 
 uart.write(b'\x7E\xFF\x06\x0C\x00\x00\x00\x00\xEF') #DFPlayer Mini to reset
 time.sleep(1)
-dfplayer       = DFPlayer(uart=uart)                # Creates uart internally
-dfplayer.set_volume(PLAYER_VOL)                     # Set volume to PLAYER_VOL
+dfplayer = DFPlayer(uart=uart)                # Creates uart internally
+dfplayer.set_volume(PLAYER_VOL)                # Set volume to PLAYER_VOL
 time.sleep(1)
 dfplayer.play(track=8) # Play startup confirmation sound effect
 setup_leds()
@@ -99,6 +99,9 @@ def calibrate_sensor(sensor, oled, calibration_time=10):
     time.sleep(2)  # Pause to show message
     return baseline
 
+def get_baseline(readings):
+    return sum(readings) / len(readings)
+
 # Function to update history buffer
 def update_history(new_value):
     y_history.append(new_value)
@@ -113,7 +116,7 @@ def simple_moving_average(history, window_size=10):
     return [sum(history[max(i - window_size, 0):i+1]) / min(i + 1, window_size) for i in range(len(history))]
 
 # Function to process magnetometer data
-def process_mag_data(mx, my, mz, baseline):
+def process_mag_data(baseline):
     emf_strength = math.sqrt(mx**2 + my**2 + mz**2) - baseline
     mapped_emf = map_value(emf_strength, EMF_MIN_µT, EMF_MAX_µT, EMF_MIN_ADC, EMF_MAX_ADC)
     processed_value = (mapped_emf ** 2)
@@ -133,7 +136,7 @@ def blink_leds(interval):
         previous_millis = current_time
         
 # Function to control LEDs
-def led_control(emf_level):
+def led_control(emf_reading):
     emf_range = EMF_MAX_ADC - EMF_MIN_ADC
     speed_range = LED_SLOW - LED_FAST
     interval = (((emf_reading - EMF_MIN_ADC) * speed_range) / emf_range) + LED_FAST
@@ -172,13 +175,13 @@ def draw_line(oled, x0, y0, x1, y1, color):
             err += dx
             y0 += sy
 
-def draw_graph(processed_value):
+def draw_graph(emf_reading):
     oled.fill(0)  # Clear the display    
-    oled.text('EMF: {:.2f}'.format(processed_value), 0, 0, 1)
+    oled.text('EMF: {:.2f}'.format(emf_reading), 0, 0, 1)
     oled.text('SH: {:.2f}'.format(y_history[-1] if y_history else 0), 0, 10, 1)
 
     if smoothed_history:
-        for x in range(1, len(smoothed_history)):
+        for x in range(1, len(emf_reading)):
             y0 = GRAPH_BASELINE_Y - (y_history[x - 1] * SCALE_FACTOR)
             y1 = GRAPH_BASELINE_Y - (y_history[x] * SCALE_FACTOR)            
             y0 = max(0, min(oled.height, y0))
