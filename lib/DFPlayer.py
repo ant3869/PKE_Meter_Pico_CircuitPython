@@ -39,7 +39,7 @@ class DFPlayer(object):
 
   # --- constructor   --------------------------------------------------------
 
-  def __init__(self,uart=None,media=None,volume=50,eq=None,latency=0.100):
+  def __init__(self,uart=None,media=None,volume=100,eq=None,latency=0.100):
     if uart is None:
       self._uart = busio.UART(board.TX,board.RX,baudrate=9600)
     else:
