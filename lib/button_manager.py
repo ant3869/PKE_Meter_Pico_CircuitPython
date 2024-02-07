@@ -32,10 +32,8 @@
 
 import time
 import board
-import busio
-import digitalio
 
-class ButtonManager(object):
+class ButtonManager():
     
 # --- constants   --------------------------------------------------------
 
@@ -55,7 +53,7 @@ class ButtonManager(object):
     decrease_sensitivity_pin = None,
     led_increase_pin         = None,
     led_decrease_pin         = None,
-    debounce_delay           = 0.100):
+    debounce_delay           = 0.500):
      
     # Initialize sensitivity button pins
     self.button_increase_sensitivity = self.setup_button(increase_sensitivity_pin or self.BUTTON_SENSITIVITY_INCREASE)
@@ -72,18 +70,18 @@ class ButtonManager(object):
 # --- variables   --------------------------------------------------------
         
     # Debounce handling
-    self.debounce_delay = debounce_delay
+    self.debounce_delay     = debounce_delay
     self.last_debounce_time = 0
 
     # Sensitivity variables
-    self.sensitivity = 0.5      # Starting sensitivity, adjust as needed
-    self.sensitivity_min = 0.1  # Minimum sensitivity
-    self.sensitivity_max = 1.0  # Maximum sensitivity
-    self.sensitivity_step = 0.1 # Sensitivity adjustment step
+    self.sensitivity      = 0.5  # Starting sensitivity, adjust as needed
+    self.sensitivity_min  = 0.1  # Minimum sensitivity
+    self.sensitivity_max  = 1.0  # Maximum sensitivity
+    self.sensitivity_step = 0.1  # Sensitivity adjustment step
 
     # Gain variables
     self.current_gain_index = 0
-    self.mag_gains = ["MAGGAIN_4GAUSS", "MAGGAIN_8GAUSS", "MAGGAIN_12GAUSS", "MAGGAIN_16GAUSS"]
+    self.mag_gains          = ["MAGGAIN_4GAUSS", "MAGGAIN_8GAUSS", "MAGGAIN_12GAUSS", "MAGGAIN_16GAUSS"]
      
 # --- functions   --------------------------------------------------------
 
@@ -105,14 +103,18 @@ class ButtonManager(object):
     # Handle sensitivity buttons
     if self.check_button_pressed(self.button_increase_sensitivity, current_time):
         self.adjust_sensitivity(True)
+        print("Sensitivity Increase button pressed")
     if self.check_button_pressed(self.button_decrease_sensitivity, current_time):
         self.adjust_sensitivity(False)
+        print("Sensitivity Decrease button pressed")
     
     # Handle gain buttons
     if self.check_button_pressed(self.button_increase_gain, current_time):
         self.cycle_mag_gain(True)
+        print("Gain Increase button pressed")
     if self.check_button_pressed(self.button_decrease_gain, current_time):
         self.cycle_mag_gain(False)
+        print("Gain Decrease button pressed") 
 
     # Debounce delay handling
     time.sleep(self.debounce_delay)
@@ -125,17 +127,17 @@ class ButtonManager(object):
     return False
 
   def adjust_sensitivity(self, is_increase):
-    """Adjusts the sensitivity based on the button pressed."""
+    """Adjust the sensitivity based on the button pressed."""
     if is_increase:
         self.sensitivity = min(self.sensitivity + self.sensitivity_step, self.sensitivity_max)
     else:
         self.sensitivity = max(self.sensitivity - self.sensitivity_step, self.sensitivity_min)
     
     print(f"Sensitivity adjusted to {self.sensitivity}")
-    # Add logic here to apply the sensitivity adjustment to your application
+    # apply the sensitivity adjustment to your application
 
   def cycle_mag_gain(self, is_increase):
-    """Adjusts the gain based on the button pressed."""
+    """Adjust the gain based on the button pressed."""
     if is_increase:
         self.current_gain_index += 1
         if self.current_gain_index >= len(self.mag_gains):
