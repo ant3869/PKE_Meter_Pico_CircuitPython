@@ -15,8 +15,8 @@
         LEDs speed increase and decrease (reflecting detection: Higher the reading, faster the speed, and vice versa)
         3 unique SFX while detecting (low, medium, and high readings)
 
-    Components:
-        Raspberry Pi Pico (3.3V)
+    Components:       
+        Raspberry Pi Pico with rp2040 (using Adafruit CircuitPython 8.2.9)
         LSM9DS1 D0F 3-axis Accel/Mag/Gyro
         DFPlayer Mini
         5V 2A Recharge/Boost Converter Power Module
@@ -28,24 +28,24 @@
         3.7v Lithium Rechargeable Battery
         
     Hardware Connections (pin configurations):
-        GP0:  PLAYER_RX (DFPlayer Mini RX)
-        GP1:  PLAYER_TX (DFPlayer Mini TX)
-        GP2:  SERVO_PIN (Wing Servo)
-        GP4:  I2C_SDA (I2C SDA connection for LSM9DS1)
-        GP5:  I2C_SCL (I2C SCL connection for LSM9DS1) 
-        GP10: BUTTON_SENSITIVITY_DECREASE (Decrease signal detetection sensitivity value) (14)
-        GP11: BUTTON_SENSITIVITY_INCREASE (Increase signal detetection sensitivity value) (15)
-        GP12: BUTTON_GAIN_DECREASE (Decrease signal gain value) (16)
-        GP13: BUTTON_GAIN_INCREASE (Increase signal gain value) (17)
+         GP0: PLAYER_RX (DFPlayer Mini RX) (1)
+         GP1: PLAYER_TX (DFPlayer Mini TX) (2)
+         GP2: SERVO_PIN (Wing Servo)       (4)
+         GP4: I2C_SDA (I2C SDA connection for LSM9DS1) (6)
+         GP5: I2C_SCL (I2C SCL connection for LSM9DS1) (7)
+        GP10: BUTTON_GAIN_DECREASE (Decrease signal gain value) (14)
+        GP11: BUTTON_GAIN_INCREASE (Increase signal gain value) (15)
+        GP12: BUTTON_SENSITIVITY_DECREASE (Decrease signal detetection sensitivity value) (16)
+        GP13: BUTTON_SENSITIVITY_INCREASE (Increase signal detetection sensitivity value) (17)
         GP14: LED_INCREASE (Signal adjustment increased indicator LED) (19)
         GP15: LED_DECREASE (Signal adjustment decreased indicator LED) (20)
-        GP16: LED_WING_1 (Wing/Display LED 1) GREEN
-        GP17: LED_WING_2 (Wing/Display LED 2) BLUE
-        GP18: LED_WING_3 (Wing/Display LED 3) WHITE
-        GP19: LED_WING_4 (Wing/Display LED 4) RED
-        GP20: LED_WING_5 (Wing/Display LED 5) YELLOW (R)
-        GP21: LED_WING_6 (Wing/Display LED 6) BLACK
-        GP22: LED_WING_7 (Wing/Display LED 7) YELLOW
+        GP16: LED_WING_1 (Wing/Display LED 1) GREEN      (21)
+        GP17: LED_WING_2 (Wing/Display LED 2) BLUE       (22)
+        GP18: LED_WING_3 (Wing/Display LED 3) WHITE      (24)
+        GP19: LED_WING_4 (Wing/Display LED 4) RED        (25)
+        GP20: LED_WING_5 (Wing/Display LED 5) YELLOW (R) (26)
+        GP21: LED_WING_6 (Wing/Display LED 6) BLACK      (27)
+        GP22: LED_WING_7 (Wing/Display LED 7) YELLOW     (29)
     
 """
 
@@ -61,10 +61,12 @@ from dfplayer import DFPlayer
 from lib.servo_ramp import ServoRamp
 from lib.led_controller import LEDController
 from lib.sensor_manager import SensorManager
+from lib.button_manager import ButtonManager
 from adafruit_ssd1306 import SSD1306_I2C
 from digitalio import DigitalInOut, Direction
 
 # --- pin decleration   ----------------------------------------------------------
+
 SERVO_PIN        = board.GP2
 
 PLAYER_TX        = board.GP0  # board.TX
@@ -81,17 +83,9 @@ LED_WING_5       = board.GP20
 LED_WING_6       = board.GP21
 LED_WING_7       = board.GP22
 
-LED_INCREASED    = board.GP14  # Button Variable Increased Indicator LED
-LED_DECREASED    = board.GP15  # Button Variable Decreased Indicator LED
-
-BUTTON_SENSITIVITY_DECREASE  = board.GP10  # Window Variable Increase Button
-BUTTON_SENSITIVITY_INCREASE  = board.GP11  # Window Variable Decrease Button
-BUTTON_GAIN_DECREASE  = board.GP12    
-BUTTON_GAIN_INCREASE  = board.GP13    
-
 # --- constants/variables   ----------------------------------------------------------
-player_baud      = 9600
-player_vol       = 80
+
+player_vol       = 100
 current_track     = None
 
 emf_min_µt       = 0.0           # Minimum expected EMF reading
@@ -115,63 +109,28 @@ GRAPH_BASELINE_Y  = OLED_HEIGHT-6 # Baseline for the graph (e.g., half the OLED 
 calibration_time  = 10
 window_size       = 10            # Default window size for smoothing
 
-# sensitivity
-sensitivity = 0.5  # Starting sensitivity, adjust as needed
-sensitivity_min = 0.1  # Minimum sensitivity
-sensitivity_max = 1.0  # Maximum sensitivity
-sensitivity_step = 0.1  # Sensitivity adjustment step
-
-# gain
-gain = 0.5  # Starting sensitivity, adjust as needed
-gain_min = 0.1  # Minimum sensitivity
-gain_max = 1.0  # Maximum sensitivity
-gain_step = 0.1  # Sensitivity adjustment step
-
-# button states
-last_increase_state = True
-last_decrease_state = True
-last_debounce_time = 0
-debounce_delay = 0.05  # 50 milliseconds for debounce
-
 # --- objects   -----------------------------------------------------------
-i2c       = busio.I2C(I2C_SCL, I2C_SDA)
-uart      = busio.UART(tx=PLAYER_TX, rx=PLAYER_RX, baudrate=player_baud) # Using UART0 on default pins GP0 (TX)and GP1 (RX)
 
-led_increased   = digitalio.DigitalInOut(LED_INCREASED)
-led_decreased   = digitalio.DigitalInOut(LED_DECREASED)
-
-button_increase = digitalio.DigitalInOut(BUTTON_SENSITIVITY_INCREASE)      # Direct use as touch-button             
-button_decrease = digitalio.DigitalInOut(BUTTON_SENSITIVITY_DECREASE)      # Example pin for decrease
-
+i2c            = busio.I2C(I2C_SCL, I2C_SDA)
+uart           = busio.UART(tx=PLAYER_TX, rx=PLAYER_RX) # Using UART0 on default pins GP0 (TX)and GP1 (RX)
 oled           = SSD1306_I2C(OLED_WIDTH, OLED_HEIGHT, i2c)
 sensor         = adafruit_lsm9ds1.LSM9DS1_I2C(i2c)
 led_controller = LEDController(LED_PINS, pwm=False)
 servo_ramp     = ServoRamp(servo_pin=SERVO_PIN)
 sensor_manager = SensorManager(sensor, oled, servo_ramp)
+button_manager = ButtonManager()
 
 # --- initialization   ----------------------------------------------------
+
 y_history = [OLED_HEIGHT // 6] * OLED_WIDTH    
-
-led_increased.direction   = digitalio.Direction.OUTPUT
-led_decreased.direction   = digitalio.Direction.OUTPUT
-
-button_decrease.direction = digitalio.Direction.INPUT
-button_decrease.pull      = digitalio.Pull.UP
-button_increase.direction = digitalio.Direction.INPUT
-button_increase.pull      = digitalio.Pull.UP
 
 try:
     uart.write(b'\x7E\xFF\x06\x0C\x00\x00\x00\x00\xEF') #DFPlayer Mini to reset
     time.sleep(2)
     dfplayer = DFPlayer(uart=uart)
-    dfplayer.set_eq(DFPlayer.EQ_NORMAL)
-    dfplayer.set_volume(player_vol)
     print("DFPlayer initialized successfully.")
 except Exception as e:
     print("Failed to initialize DFPlayer:", e)
-
-time.sleep(1)
-dfplayer.play(track=8) # Play startup confirmation sound effect
 
 # --- functions   ----------------------------------------------------
 
@@ -204,49 +163,6 @@ def play_track_based_on_emf(emf_reading):
         play_sound_effect(2)  # Attempt to play track 2
     else:
         play_sound_effect(3)  # Attempt to play track 3
-        
-def check_and_handle_buttons():
-    global last_increase_state, last_decrease_state, last_debounce_time
-    current_increase_state = button_increase.value
-    current_decrease_state = button_decrease.value
-    current_time = time.monotonic()
-
-    # Check if button states have changed to initiate a debounce period
-    if current_increase_state != last_increase_state:
-        last_debounce_time = current_time
-
-    if current_decrease_state != last_decrease_state:
-        last_debounce_time = current_time
-
-    # After the debounce delay, process the button state if it has changed
-    if (current_time - last_debounce_time) > debounce_delay:
-        # If button state is stable and has changed, handle the button action
-        if current_increase_state != last_increase_state and not current_increase_state:
-            adjust_sensitivity(True)
-
-        if current_decrease_state != last_decrease_state and not current_decrease_state:
-            adjust_sensitivity(False)
-
-    # Update the last button states
-    last_increase_state = current_increase_state
-    last_decrease_state = current_decrease_state
-
-def adjust_sensitivity(is_increase):
-    global sensitivity
-    if is_increase:
-        sensitivity = min(sensitivity + sensitivity_step, sensitivity_max)
-        led_increased.value = True
-        time.sleep(0.2)  # Short feedback duration
-        led_increased.value = False
-    else:
-        sensitivity = max(sensitivity - sensitivity_step, sensitivity_min)
-        led_decreased.value = True
-        time.sleep(0.2)  # Short feedback duration
-        led_decreased.value = False
-
-    print(f"Sensitivity adjusted to {sensitivity}")
-    led_increased.value = False
-    led_decreased.value = False
 
 # Function to draw a line
 def draw_line(oled, x0, y0, x1, y1, color):
@@ -312,5 +228,10 @@ def main_loop():
 
 if __name__ == "__main__":
     history = []
+    window_size = 10
+    val = dfplayer.num_files(folder=None,media=DFPlayer.MEDIA_SD)
+    print(val)
     sensor_manager.perform_calibration()
+    dfplayer.play(track=8)
+    time.sleep(2)
     main_loop()
