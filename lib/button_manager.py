@@ -108,7 +108,6 @@ class ButtonManager():
   def handle_button_press(self, button, is_increase, action_method):
     if self.check_button_pressed(button):
         action_method(is_increase)
-        # Toggle corresponding LED based on the action
         self.toggle_led(self.led_increase if is_increase else self.led_decrease)
 
   def check_button_pressed(self, button):
@@ -174,12 +173,6 @@ class ButtonManager():
     
     print(f"Sensitivity adjusted to {self.sensitivity}")
     # apply the sensitivity adjustment to your application
-
-  def cycle_mag_gain(self, is_increase):
-    """Cycles through magnetometer gain settings."""
-    self.current_gain_index += 1 if is_increase else -1
-    self.current_gain_index %= len(self.mag_gains)  # Wrap index
-    print(f"Magnetometer gain set to {self.mag_gains[self.current_gain_index]}")
 
   def cycle_mag_gain(self, is_increase):
     """Cycles through magnetometer gain settings."""
