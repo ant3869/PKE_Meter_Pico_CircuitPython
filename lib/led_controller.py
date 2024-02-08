@@ -105,3 +105,39 @@ class LEDController:
         brightness = max(0, min(1, brightness))  # Clamp brightness value
         for led in self.leds:
             led.duty_cycle = int(brightness * 65535)
+
+
+def setup_leds(led_pins):
+    led_objects = []  # This will hold the DigitalInOut objects for the LEDs
+    for pin in led_pins:
+        led = digitalio.DigitalInOut(pin)
+        led.direction = digitalio.Direction.OUTPUT
+        led_objects.append(led)
+    return led_objects
+
+def update_led_state(led_index, state):
+    """Update the state of a specific LED and record the time of this update."""
+    global led_states, led_timestamps
+    current_time = time.monotonic()
+    if state != led_states[led_index]:  # Only update if the state has changed
+        led_objects[led_index].value = state
+        led_states[led_index] = state
+        led_timestamps[led_index] = current_time  # Record the time of this change
+
+# blink LEDs function
+def blink_leds(led_objects, interval):
+    global current_led, previous_millis
+    current_time = time.monotonic()
+    if current_time - previous_millis >= interval:
+        led_objects[current_led].value = False  # Turn off the current LED
+        current_led = (current_led + 1) % len(led_objects)
+        led_objects[current_led].value = True   # Turn on the next LED
+        previous_millis = current_time
+
+# control LEDs based on EMF reading
+def led_control(emf_reading, led_objects):
+    emf_range = EMF_MAX_ADC - EMF_MIN_ADC
+    interval_factor = ((emf_reading - EMF_MIN_ADC) / emf_range) ** 0.2  # Square root for non-linear mapping
+    speed_range = led_slow - led_fast
+    interval = led_slow - (interval_factor * speed_range)
+    blink_leds(led_objects, interval)
