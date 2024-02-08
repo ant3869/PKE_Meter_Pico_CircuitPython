@@ -82,8 +82,8 @@ led_increased_start = 0
 led_decreased_start = 0
 
 led_objects = []
-led_slow    = 1.0
-led_fast    = 0.02
+led_slow    = 1.25
+led_fast    = 0.01
 interval    = 0
 current_led = 0
 led_states      = [False] * len(led_objects)  # Initialize all LED states to False (off)
