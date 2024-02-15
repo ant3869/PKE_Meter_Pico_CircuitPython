@@ -5,10 +5,9 @@ GP1: PLAYER_TX (DFPlayer Mini TX) (2)
 GP2: SERVO_PIN (Wing Servo) (4)
 GP4: I2C_SDA (I2C SDA connection for LSM9DS1) (6)
 GP5: I2C_SCL (I2C SCL connection for LSM9DS1) (7)
-GP10: BUTTON_GAIN_DECREASE (Decrease signal gain value) (14)
-GP11: BUTTON_GAIN_INCREASE (Increase signal gain value) (15)
-GP12: BUTTON_SENSITIVITY_DECREASE (Decrease signal detection sensitivity value) (16)
-GP13: BUTTON_SENSITIVITY_INCREASE (Increase signal detection sensitivity value) (17)
+GP26: BUTTON_CYCLE_GAIN (Cycle through gain settings [0, 32, 64, 90]) (15)
+GP27: BUTTON_SENSITIVITY_DECREASE (Decrease signal detection sensitivity value) (16)
+GP28: BUTTON_SENSITIVITY_INCREASE (Increase signal detection sensitivity value) (17)
 GP14: LED_INCREASE (Signal adjustment increased indicator LED) (19)
 GP15: LED_DECREASE (Signal adjustment decreased indicator LED) (20)
 GP16: LED_WING_1 (Wing/Display LED 1) RED    (21)
@@ -34,14 +33,13 @@ from adafruit_ssd1306 import SSD1306_I2C
 from digitalio import DigitalInOut, Direction
 from servo_ramp import ServoRamp
 from sound_manager import SoundManager
+from led_manager import LEDManager
+from button_manager import ButtonManager
 
 # --- constants   ----------------------------------------------------------
 
 SERVO_PIN        = board.GP2
-
 PLAYER_TX, PLAYER_RX    = board.GP0, board.GP1 
-PLAYER_BAUD, PLAYER_VOL = 9600, 80
-
 I2C_SDA, I2C_SCL        = board.GP4, board.GP5
 
 LED_WING_1       = board.GP16
@@ -52,15 +50,11 @@ LED_WING_5       = board.GP20
 LED_WING_6       = board.GP21
 LED_WING_7       = board.GP22
 
-BUTTON_SENSITIVITY_DECREASE  = board.GP26 # , BUTTON_SENSITIVITY_INCREASE  = board.GP11
-BUTTON_GAIN_DECREASE, BUTTON_GAIN_INCREASE = board.GP27, board.GP28
-LED_INCREASED, LED_DECREASED = board.GP14, board.GP15
-SW_THRESHOLD, LED_ON_DURATION     = 65000, 1.0
+# --- variables   ----------------------------------------------------------
 
-EMF_MIN_µT       = 0.0           # Minimum expected EMF reading
-EMF_MAX_µT       = 1100.0        # Maximum expected EMF reading
-EMF_MIN_ADC      = 0
-EMF_MAX_ADC      = 1100
+PLAYER_BAUD, PLAYER_VOL = 9600, 100
+EMF_MIN_µT, EMF_MAX_µT     = 0.0, 1100.0    # Minimum expected EMF reading     
+EMF_MIN_ADC, EMF_MAX_ADC   = 0,   1100      # Maximum expected EMF reading
 
 OLED_WIDTH, OLED_HEIGHT, SCALE_FACTOR = 128, 64, 0.5
 GRAPH_BASELINE_Y, MAX_GRAPH_VALUE     = OLED_HEIGHT-6, OLED_HEIGHT-62 
@@ -72,32 +66,14 @@ i2c        = busio.I2C(I2C_SCL, I2C_SDA)
 leds       = [LED_WING_1,LED_WING_2, LED_WING_3, LED_WING_4, LED_WING_5, LED_WING_6, LED_WING_7]
 oled       = SSD1306_I2C(OLED_WIDTH, OLED_HEIGHT, i2c)
 sensor     = adafruit_lsm9ds1.LSM9DS1_I2C(i2c)
-servo_ramp    = ServoRamp(servo_pin=SERVO_PIN)
-sound_manager = SoundManager()
+servo_ramp     = ServoRamp(servo_pin=SERVO_PIN)
+sound_manager  = SoundManager()
+led_manager    = LEDManager(leds)
+button_manager = ButtonManager(sensor)
 
 # --- initialization   ----------------------------------------------------
 
-led_increased               = digitalio.DigitalInOut(LED_INCREASED)
-led_decreased               = digitalio.DigitalInOut(LED_DECREASED)
-led_increased.direction     = digitalio.Direction.OUTPUT
-led_decreased.direction     = digitalio.Direction.OUTPUT
-button_gain_increase        = analogio.AnalogIn(BUTTON_GAIN_INCREASE)
-button_gain_decrease        = analogio.AnalogIn(BUTTON_GAIN_DECREASE)
-# button_sensitivity_increase = analogio.AnalogIn(BUTTON_SENSITIVITY_INCREASE)
-button_sensitivity_decrease = analogio.AnalogIn(BUTTON_SENSITIVITY_DECREASE)
-led_increased_start = 0
-led_decreased_start = 0
-
-led_objects = []
-led_slow    = 1.25
-led_fast    = 0.01
-interval    = 0
-current_led = 0
-led_states      = [False] * len(led_objects)  # Initialize all LED states to False (off)
-led_timestamps  = [0] * len(led_objects)      # Track when each LED was last toggled
-previous_millis = time.monotonic()
-
-calibration_time = 10
+calibration_time = 20
 baseline         = 0
 y_history        = [OLED_HEIGHT // 6] * OLED_WIDTH
 
@@ -164,90 +140,20 @@ def process_mag_data():
     processed_value = (mapped_emf ** 3)
     return max(0, min(1100, processed_value))
 
-# --- lights  ---------------------------------------------------- 
-
-def setup_leds(led_pins):
-    led_objects = []  # This will hold the DigitalInOut objects for the LEDs
-    for pin in led_pins:
-        led = digitalio.DigitalInOut(pin)
-        led.direction = digitalio.Direction.OUTPUT
-        led_objects.append(led)
-    return led_objects
-
-def update_led_state(led_index, state):
-    """Update the state of a specific LED and record the time of this update."""
-    global led_states, led_timestamps
-    current_time = time.monotonic()
-    if state != led_states[led_index]:  # Only update if the state has changed
-        led_objects[led_index].value = state
-        led_states[led_index] = state
-        led_timestamps[led_index] = current_time  # Record the time of this change
-
-# blink LEDs function
-def blink_leds(led_objects, interval):
-    global current_led, previous_millis
-    current_time = time.monotonic()
-    if current_time - previous_millis >= interval:
-        led_objects[current_led].value = False  # Turn off the current LED
-        current_led = (current_led + 1) % len(led_objects)
-        led_objects[current_led].value = True   # Turn on the next LED
-        previous_millis = current_time
-
-# control LEDs based on EMF reading
-def led_control(emf_reading, led_objects):
-    emf_range = EMF_MAX_ADC - EMF_MIN_ADC
-    interval_factor = ((emf_reading - EMF_MIN_ADC) / emf_range) ** 0.2  # Square root for non-linear mapping
-    speed_range = led_slow - led_fast
-    interval = led_slow - (interval_factor * speed_range)
-    blink_leds(led_objects, interval)
-
-# --- buttons  ---------------------------------------------------- 
-  
-def update_led_states_based_on_timing(current_time):
-    global led_increased_start, led_decreased_start
-
-    # Turn off led_increased if it has been on longer than LED_ON_DURATION
-    if led_increased.value and (current_time - led_increased_start > LED_ON_DURATION):
-        led_increased.value = False
-
-def check_buttons():
-    global led_increased_start, led_decreased_start     
-    current_time = time.monotonic()
-    any_button_pressed = False
-
-    # Check each button
-    if button_gain_increase.value > SW_THRESHOLD:
-        print("Gain Increase Button Pressed")
-        led_increased.value = True
-        led_decreased.value = False  # Ensure the other LED is off
-        any_button_pressed = True
-    if button_gain_decrease.value > SW_THRESHOLD:
-        print("Gain Decrease Button Pressed")
-        led_decreased.value = True
-        led_increased.value = False  # Ensure the other LED is off
-        any_button_pressed = True
-    if button_sensitivity_decrease.value > SW_THRESHOLD:
-        print("Sensitivity Decrease Button Pressed")
-        led_decreased.value = True
-        led_increased.value = False  # Ensure the other LED is off
-        any_button_pressed = True
-#     if button_sensitivity_increase.value > SW_THRESHOLD:
-#         print("Sensitivity Increase Button Pressed")
-#         led_increased.value = True
-#         led_decreased.value = False  # Ensure the other LED is off
-#         any_button_pressed = True
-
-    if led_increased.value:
-        led_increased_start = current_time
-        update_led_states_based_on_timing(current_time)
-    elif led_decreased.value:
-        led_decreased_start = current_time
-        update_led_states_based_on_timing(current_time)
-    else:
-        led_increased.value = False
-        led_decreased.value = False
-
 # --- display  ----------------------------------------------------
+
+# # Setup LEDs
+# leds = [digitalio.DigitalInOut(pin) for pin in led_pins]
+# for led in leds:
+#     led.direction = digitalio.Direction.OUTPUT
+# 
+# def blink_leds(leds, duration, min_interval=0.0001):
+#     end_time = time.monotonic() + duration
+#     while time.monotonic() < end_time:
+#         for led in leds:
+#             led.value = True
+#             time.sleep(min_interval)  # Sleep for a very short duration
+#             led.value = False
 
 # draw a line
 def draw_line(oled, x0, y0, x1, y1, color):
@@ -287,9 +193,9 @@ def draw_graph(value):
     oled.show()
 
 def update():
-    check_buttons()
+    button_manager.check_and_handle_buttons()
     value = process_mag_data()
-    led_control(value, led_objects)
+    led_manager.led_control(value)
     sound_manager.sound_control(value)
     servo_ramp.emf_to_servo_pos(value)
     update_history(value)
@@ -297,7 +203,6 @@ def update():
     
 # --- main   ----------------------------------------------------
 
-led_objects = setup_leds(leds)
 calibrate_sensor()
 update_history(0)
 servo_ramp.park_servo()
@@ -307,4 +212,4 @@ time.sleep(1)
 
 while True:
     update()
-    time.sleep(0.1)
+    #time.sleep(0.001)
