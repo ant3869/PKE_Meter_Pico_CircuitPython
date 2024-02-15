@@ -27,12 +27,12 @@ class ButtonManager:
     BUTTON_SENSITIVITY_INCREASE = board.GP28   
     LED_INCREASED   = board.GP14
     LED_DECREASED   = board.GP15
-    SW_THRESHOLD    = 61500
+    SW_THRESHOLD    = 61000
     LED_ON_DURATION = 1.0  
 
 # --- constructors   ------------------------------------------------------
 
-    def __init__(self, sensor, debounce_delay=0.050):
+    def __init__(self, sensor, debounce_delay=0.500):
         self.sensor = sensor
         self.debounce_delay = debounce_delay
         self.last_debounce_time = 0
